@@ -5,6 +5,7 @@ struct MacAppSettings: Codable, Equatable, Sendable {
     static let currentVersion = 1
 
     var version: Int = currentVersion
+    var modelSourceID: String? = AppModelInstallDescriptor.default.id
     var contextTokens: Int = AppContextLengthOption.fourK.tokens
     var expertCacheSlots: Int = 16
     var temperature: Double = 0.2
@@ -13,6 +14,15 @@ struct MacAppSettings: Codable, Equatable, Sendable {
     var topPEnabled: Bool = true
     var topP: Double = 0.95
     var prefillEnabled: Bool = true
+
+    var resolvedModelSourceID: String {
+        guard let modelSourceID,
+              AppModelInstallDescriptor.all.contains(
+                  where: { $0.id == modelSourceID }) else {
+            return AppModelInstallDescriptor.default.id
+        }
+        return modelSourceID
+    }
 
     func isValid() -> Bool {
         version == Self.currentVersion

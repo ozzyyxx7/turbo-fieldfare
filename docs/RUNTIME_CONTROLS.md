@@ -26,7 +26,7 @@ benchmark protocol.
 
 | Control | Values | Production default | Effect |
 | --- | --- | --- | --- |
-| Expert-cache slots | 8, 16, 24, 32 | 16 | More slots can retain more routed experts and reduce later reads, but values above 16 use more RAM. |
+| Expert-cache slots | 8, 16, 24, 32, 64 experimental | 16 | More slots can retain more routed experts and reduce later reads, but values above 16 use more RAM. The CLI equivalent is `--expert-cache-slots`. |
 | Prompt prefill | On, off | On | On processes known prompt tokens through the chunked prefill path. Off disables that path. |
 | RDADVISE | Off, Default, Bounded, Adaptive | Off | Applies experimental read advice. Its effect depends on the workload; it may help a short decode and slow a long one. |
 
@@ -34,6 +34,17 @@ Changing context length, expert-cache slots, or RDADVISE requires a reload.
 Some sampling changes also require a reload because greedy and sampled
 generation use different output-head paths. Prompt-prefill settings apply to
 each request and do not require a reload.
+
+The 8-slot chunked-prefill path uses four-expert tiles so two in-flight tiles
+fit its cache budget. The 16-slot and larger paths retain the production
+eight-expert tile width. This changes scheduling only; all top-8 routed-expert
+contributions are still evaluated.
+
+On a 4K context, the known static capacity estimates are approximately 2.33,
+3.08, 3.83, 4.58, and 7.58 GiB for 8, 16, 24, 32, and 64 slots. These are not
+RSS guarantees. The 64-slot option adds about 4.84 GB over the default and is
+experimental; it can increase memory pressure without improving speed. A
+128-slot full cache is intentionally unsupported.
 
 ## Run an experiment
 

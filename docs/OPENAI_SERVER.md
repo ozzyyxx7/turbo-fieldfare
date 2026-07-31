@@ -27,6 +27,28 @@ The server loads the model before opening the port. Wait for
 `TurboFieldfareServer ready`, then keep the process running while clients use
 it.
 
+For SuperGemma, select its independent installation and API identifier:
+
+```bash
+.build/release/TurboFieldfareServer \
+  --model scratch/supergemma4.gturbo \
+  --model-id supergemma-4-26b-a4b-uncensored \
+  --port 8080 \
+  --max-context 16384
+```
+
+Use that same `supergemma-4-26b-a4b-uncensored` value in client requests.
+For example, the request below becomes:
+
+```json
+{
+  "model": "supergemma-4-26b-a4b-uncensored",
+  "messages": [{"role": "user", "content": "Reply with exactly READY."}],
+  "temperature": 0,
+  "max_completion_tokens": 16
+}
+```
+
 Check the server from another terminal:
 
 ```bash
@@ -87,6 +109,10 @@ OpenCode:
 ```
 
 Select `turbofieldfare/gemma-4-26b-a4b-it` in OpenCode.
+When the server was started with SuperGemma, replace both stock model IDs in
+the Python or OpenCode examples with
+`supergemma-4-26b-a4b-uncensored`; then select
+`turbofieldfare/supergemma-4-26b-a4b-uncensored`.
 
 ## Prompt reuse
 

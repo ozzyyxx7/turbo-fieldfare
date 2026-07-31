@@ -141,7 +141,8 @@ enum RepackPlanner {
     static func plan(meta: IndexLoader.SourceMetadata,
                             arch: ArchInfo,
                             shardHeaders: [Safetensors.Header],
-                            outputDir: String) throws -> RepackPlan {
+                            outputDir: String,
+                            sourceModelID: String? = nil) throws -> RepackPlan {
 
         // Companion tensors may live in different shards, so resolve them
         // through one global registry.
@@ -214,7 +215,8 @@ enum RepackPlanner {
             layerPlans.append(lp)
         }
 
-        let matched = SourceFingerprint.modelID(forIndexSha256: meta.indexSha256Hex)
+        let matched = sourceModelID
+            ?? SourceFingerprint.modelID(forIndexSha256: meta.indexSha256Hex)
 
         return RepackPlan(arch: arch,
                           baseMode: meta.baseMode,

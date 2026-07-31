@@ -297,9 +297,20 @@ struct ServerArgumentTests {
     @Test func defaults() throws {
         let arguments = try ServerArguments.parse(["--model", "model.gturbo"])
         #expect(arguments.port == 8080)
+        #expect(arguments.modelID == "gemma-4-26b-a4b-it")
         #expect(arguments.maxContext == 16_384)
         #expect(arguments.queueLimit == 4)
         #expect(arguments.promptCacheMode == .singlePrefix)
+    }
+
+    @Test func acceptsSuperGemmaAPIModelID() throws {
+        let arguments = try ServerArguments.parse([
+            "--model", "supergemma4.gturbo",
+            "--model-id", "supergemma-4-26b-a4b-uncensored",
+        ])
+
+        #expect(arguments.model == "supergemma4.gturbo")
+        #expect(arguments.modelID == "supergemma-4-26b-a4b-uncensored")
     }
 
     @Test func parsesSinglePrefixModeAndRejectsUnknownMode() throws {

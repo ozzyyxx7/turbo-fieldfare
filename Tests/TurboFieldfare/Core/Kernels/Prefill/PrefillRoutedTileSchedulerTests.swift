@@ -72,6 +72,18 @@ import Testing
         #expect(!depthTwoEightExperts.fitsSlotBudget(slotCount: 16))
     }
 
+    @Test func schedulerConfigFitsTileWidthToPublicSlotBudgets() {
+        let config = PrefillRoutedTileSchedulerConfig()
+
+        #expect(config.fitted(toSlotCount: 8)?.tileExperts == 4)
+        #expect(config.fitted(toSlotCount: 8)?.maxPendingDepth == 1)
+        for slots in [16, 24, 32, 64] {
+            #expect(config.fitted(toSlotCount: slots)?.tileExperts == 8)
+        }
+        #expect(config.fitted(toSlotCount: 1) == nil)
+        #expect(config.fitted(toSlotCount: 0) == nil)
+    }
+
     @Test func halfCachePreservesPendingSlotAvoidanceOrder() {
         let pendingSlots = [9, 1, 9, 3]
         let decision = PrefillRoutedTileScheduler().decide(

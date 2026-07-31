@@ -188,6 +188,47 @@ import Testing
     }
 
     @MainActor
+    @Test func variantCannotChangeAgainWhileUnloadIsPending() async throws {
+        let client = MockLifecycleInferenceClient()
+        client.suspendUnloads = true
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "variant-unload-\(UUID().uuidString)",
+                isDirectory: true)
+        let oldURL = root.appendingPathComponent("original.gturbo")
+        defer {
+            client.releaseUnloads()
+            try? FileManager.default.removeItem(at: root)
+        }
+        let model = AppModel(
+            modelDirectory: oldURL,
+            client: client,
+            installer: MockModelInstallerClient(descriptor: .stock),
+            installerFactory: {
+                MockModelInstallerClient(descriptor: $0)
+            },
+            modelLocationResolver: {
+                root.appendingPathComponent(
+                    $0.installFileName,
+                    isDirectory: true)
+            })
+
+        model.selectInstallDescriptor(id: AppModelInstallDescriptor.superGemma.id)
+        await client.waitForUnloadStart()
+        #expect(!model.canSelectInstallDescriptor)
+
+        model.selectInstallDescriptor(id: AppModelInstallDescriptor.stock.id)
+
+        #expect(model.installDescriptor == .superGemma)
+        #expect(client.unloadStartCount() == 1)
+        client.releaseUnloads()
+        for _ in 0..<200 where !model.canSelectInstallDescriptor {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.canSelectInstallDescriptor)
+    }
+
+    @MainActor
     @Test func staleReadyStateForOldModelPathIsIgnored() {
         let model = AppModel(client: MockInferenceClient())
         let oldURL = URL(fileURLWithPath: "/tmp/old.gturbo")

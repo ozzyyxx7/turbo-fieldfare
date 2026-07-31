@@ -962,16 +962,21 @@ public final class RealForwardRunner: ChunkedPrefillRunner, ContextWindowReporti
                                                                    weights: routeWeights,
                                                                    queryCount: t,
                                                                    topK: cfg.topKExperts)
-                    let schedulerConfig = Self.prefillRoutedTileSchedulerConfig
+                    let requestedSchedulerConfig =
+                        Self.prefillRoutedTileSchedulerConfig
+                    let schedulerConfig: PrefillRoutedTileSchedulerConfig
                     let routeTileExpertCount: Int
                     if let slotCount = model.routedExpertCacheSlotCount(layer: L) {
-                        guard schedulerConfig.fitsSlotBudget(slotCount: slotCount) else {
+                        guard let fitted = requestedSchedulerConfig.fitted(
+                            toSlotCount: slotCount) else {
                             throw PrefillError.chunkedUnsupported(
-                                "prefill routed tile depth \(schedulerConfig.maxPendingDepth) with \(schedulerConfig.tileExperts) experts/tile needs \((schedulerConfig.maxPendingDepth + 1) * schedulerConfig.tileExperts) slots, has \(slotCount)")
+                                "prefill routed tile lookahead cannot fit in \(slotCount) expert-cache slots")
                         }
-                        routeTileExpertCount = min(schedulerConfig.tileExperts, slotCount)
+                        schedulerConfig = fitted
+                        routeTileExpertCount = fitted.tileExperts
                     } else {
-                        routeTileExpertCount = schedulerConfig.tileExperts
+                        schedulerConfig = requestedSchedulerConfig
+                        routeTileExpertCount = requestedSchedulerConfig.tileExperts
                     }
                     let routes = try PrefillMoEGrouping.groupTokenExpertPairs(
                         pairs,

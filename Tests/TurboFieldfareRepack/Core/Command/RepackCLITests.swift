@@ -3,6 +3,15 @@ import Testing
 
 @Suite(.serialized)
 struct RepackCLITests {
+    @Test func helpListsBothAllowlistedSources() throws {
+        let result = try run(["--help"])
+
+        #expect(result.status == 0)
+        #expect(result.stdout.contains("--source <stock|supergemma>"))
+        #expect(result.stdout.contains("stock"))
+        #expect(result.stdout.contains("supergemma"))
+    }
+
     @Test func resumeAndDiscardAreMutuallyExclusive() throws {
         let output = temporaryOutput("exclusive")
         defer { clean(output) }
@@ -38,6 +47,33 @@ struct RepackCLITests {
 
         #expect(result.status == 1)
         #expect(result.stderr.contains("no resumable install state exists"))
+    }
+
+    @Test func unknownSourceFailsBeforeNetwork() throws {
+        let output = temporaryOutput("unknown-source")
+        defer { clean(output) }
+        let result = try run([
+            "--output", output,
+            "--source", "not-a-model",
+        ])
+
+        #expect(result.status == 2)
+        #expect(result.stderr.contains(
+            "invalid value for --source: not-a-model"))
+    }
+
+    @Test func sourceIsRejectedOutsideInstallMode() throws {
+        let output = temporaryOutput("verify-source")
+        defer { clean(output) }
+        let result = try run([
+            "--verify-install",
+            "--input-gturbo", output,
+            "--source", "supergemma",
+        ])
+
+        #expect(result.status == 2)
+        #expect(result.stderr.contains(
+            "verification accepts only --input-gturbo"))
     }
 
     private func run(_ arguments: [String]) throws

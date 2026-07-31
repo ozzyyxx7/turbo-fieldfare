@@ -9,6 +9,7 @@ import Testing
         #expect(arguments.messagesFile == nil)
         #expect(arguments.maxNew == 1_024)
         #expect(arguments.maxContext == 4096)
+        #expect(arguments.expertCacheSlots == 16)
         #expect(arguments.temperature == 0.2)
         #expect(arguments.topK == 64)
         #expect(arguments.topP == 0.95)
@@ -22,12 +23,14 @@ import Testing
         let arguments = try Args.parse([
             "--model", "m.gturbo", "--prompt", "hi",
             "--max-new", "32", "--max-context", "512",
+            "--expert-cache-slots", "64",
             "--temperature", "0", "--top-k", "40", "--top-p", "0.95",
             "--repetition-penalty", "1.1", "--seed", "42",
             "--stop", "A", "--stop", "B", "--quiet",
         ])
         #expect(arguments.maxNew == 32)
         #expect(arguments.maxContext == 512)
+        #expect(arguments.expertCacheSlots == 64)
         #expect(arguments.temperature == 0)
         #expect(arguments.topK == 40)
         #expect(arguments.topP == 0.95)
@@ -63,12 +66,26 @@ import Testing
     @Test func helpListsExactlyThePublicOptions() {
         let expected: Set<String> = [
             "--model", "--prompt", "--messages-file", "--max-new", "--max-context",
+            "--expert-cache-slots",
             "--temperature", "--top-k", "--top-p", "--repetition-penalty",
             "--seed", "--stop", "--quiet", "--help",
         ]
         let words = Args.usage.split { $0.isWhitespace || $0 == "(" || $0 == ")" }
         let options = Set(words.map(String.init).filter { $0.hasPrefix("--") })
         #expect(options == expected)
+    }
+
+    @Test func expertCacheSlotsRejectUnknownProfiles() {
+        for value in ["0", "12", "128"] {
+            #expect(throws: ArgsError.invalidValue(
+                flag: "--expert-cache-slots",
+                value: value)) {
+                _ = try Args.parse([
+                    "--model", "m.gturbo", "--prompt", "hi",
+                    "--expert-cache-slots", value,
+                ])
+            }
+        }
     }
 
     @Test func unsupportedSelectorsAreRejected() {

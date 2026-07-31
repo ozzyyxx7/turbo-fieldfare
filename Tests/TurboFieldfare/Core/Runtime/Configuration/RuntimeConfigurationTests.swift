@@ -32,6 +32,15 @@ import Testing
         #expect(runtime.headPath == .logits)
     }
 
+    @Test func sixtyFourSlotsAreExplicitlyExperimental() {
+        #expect(RuntimeConfiguration.standardExpertCacheSlots == [8, 16, 24, 32])
+        #expect(RuntimeConfiguration.experimentalExpertCacheSlots == [64])
+        #expect(RuntimeConfiguration.allowedExpertCacheSlots ==
+            [8, 16, 24, 32, 64])
+        let runtime = RuntimeConfiguration(expertCacheSlots: 64)
+        #expect(runtime.expertCacheSlots == 64)
+    }
+
     @Test(arguments: [32, 64, 128])
     func productionPrefillSupportsPublicChunkSizes(_ chunkTokens: Int) {
         let runtime = RuntimeConfiguration(prefillChunkTokens: chunkTokens)

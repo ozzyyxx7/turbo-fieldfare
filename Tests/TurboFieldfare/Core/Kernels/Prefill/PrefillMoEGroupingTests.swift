@@ -202,6 +202,30 @@ import Testing
         }
     }
 
+    @Test func eightSlotTileWidthPreservesAllTopEightRoutes() throws {
+        let pairs = (0..<8).map {
+            Self.pair(
+                token: 0,
+                expert: UInt32($0),
+                rank: UInt32($0),
+                weightBits: UInt32(100 + $0))
+        }
+
+        let grouped = try PrefillMoEGrouping.groupTokenExpertPairs(
+            pairs,
+            queryCount: 1,
+            topK: 8,
+            numExperts: 128,
+            tileExpertCount: 4)
+
+        #expect(grouped.tiles.count == 2)
+        #expect(grouped.tiles.allSatisfy { $0.groupCount == 4 })
+        #expect(grouped.maxLiveExpertsPerTile == 4)
+        #expect(Set(grouped.sortedPairs.map(\.rank)) == Set((0..<8).map(UInt32.init)))
+        #expect(Set(grouped.sortedPairs.map(\.weightBitsAndReserved)) ==
+            Set((100..<108).map(UInt32.init)))
+    }
+
     private static func pair(token: UInt32,
                              expert: UInt32,
                              rank: UInt32,

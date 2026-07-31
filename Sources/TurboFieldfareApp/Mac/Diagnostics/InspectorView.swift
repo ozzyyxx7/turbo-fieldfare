@@ -20,6 +20,20 @@ struct InspectorView: View {
 
     private var modelSection: some View {
         Section("Model") {
+            LabeledContent("Variant") {
+                Picker("Variant", selection: Binding(
+                    get: { model.installDescriptor.id },
+                    set: { model.selectInstallDescriptor(id: $0) }
+                )) {
+                    ForEach(model.supportedInstallDescriptors, id: \.id) { descriptor in
+                        Text(descriptor.shortDisplayName).tag(descriptor.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .disabled(!model.canSelectInstallDescriptor)
+            }
             LabeledContent("Path") {
                 HStack(spacing: 6) {
                     Text(model.modelPathText)
@@ -95,6 +109,11 @@ struct InspectorView: View {
             Text("More slots can improve decode speed by keeping more experts in memory, but they also use more RAM. Changes are compared with 4K context and 16 slots and apply after reloading the model.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if model.runtimeOptions.expertCacheSlots == 64 {
+                Text("64 slots is experimental and adds about 4.84 GB over the default. Use it only when memory pressure is low.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
         }
         .disabled(model.isRunning || model.loadState.isLoading)
     }

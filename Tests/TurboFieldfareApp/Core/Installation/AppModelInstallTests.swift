@@ -88,6 +88,76 @@ import TurboFieldfareRepackCore
   }
 
   @MainActor
+  @Test func superGemmaDescriptorComesFromThePinnedCatalog() {
+    let descriptor = AppModelInstallDescriptor.superGemma
+    #expect(descriptor.id == "supergemma")
+    #expect(descriptor.shortDisplayName == "SuperGemma 4 26B")
+    #expect(descriptor.repoID ==
+      "Jiunsong/supergemma4-26b-uncensored-mlx-4bit-v2")
+    #expect(descriptor.revision ==
+      "1ecb7582718b813fc4c7b5c3131b2b7053787f00")
+    #expect(descriptor.sourceIndexSHA256 ==
+      "df3133d5e9e400092664cb2197413a32035189ab7c41f4b000f75a284abdc512")
+    #expect(descriptor.installFileName == "supergemma4.gturbo")
+    #expect(AppModelInstallDescriptor.default == .stock)
+  }
+
+  @MainActor
+  @Test func selectingSuperGemmaChangesDescriptorAndDefaultPath() {
+    let stockInstaller = MockModelInstallerClient(descriptor: .stock)
+    let model = AppModel(
+      modelDirectory: temporaryInstallPath("profile-switch"),
+      client: MockLifecycleInferenceClient(),
+      installer: stockInstaller,
+      installerFactory: { MockModelInstallerClient(descriptor: $0) })
+
+    model.selectInstallDescriptor(id: AppModelInstallDescriptor.superGemma.id)
+
+    #expect(model.installDescriptor == .superGemma)
+    #expect(model.modelPathText.hasSuffix("/scratch/supergemma4.gturbo"))
+  }
+
+  @MainActor
+  @Test func profileSwitchResetsStateWhenResolverReusesTheSamePath() throws {
+    let directory = try makeCompleteModelInstall("shared-profile-path")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let model = AppModel(
+      modelDirectory: directory,
+      client: MockInferenceClient(),
+      installer: MockModelInstallerClient(descriptor: .stock),
+      installerFactory: { MockModelInstallerClient(descriptor: $0) },
+      modelLocationResolver: { _ in directory })
+    model.loadState = .ready(modelDirectory: directory, loadSeconds: 1)
+
+    model.selectInstallDescriptor(id: AppModelInstallDescriptor.superGemma.id)
+
+    #expect(model.installDescriptor == .superGemma)
+    #expect(model.modelPathText == directory.standardizedFileURL.path)
+    #expect(model.loadState == .notLoaded)
+    guard case .partial = model.installationStatus else {
+      Issue.record("expected stock installation to be rejected for SuperGemma")
+      return
+    }
+  }
+
+  @MainActor
+  @Test func superGemmaInstallerRecognizesItsCompletedInstall() throws {
+    let descriptor = AppModelInstallDescriptor.superGemma
+    let directory = try makeCompleteModelInstall(
+      "supergemma-installed",
+      descriptor: descriptor)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let model = AppModel(
+      modelDirectory: directory,
+      client: MockLifecycleInferenceClient(),
+      installer: MockModelInstallerClient(descriptor: descriptor))
+
+    #expect(model.installDescriptor == descriptor)
+    #expect(model.isModelInstalled)
+    #expect(model.canLoadModel)
+  }
+
+  @MainActor
   @Test func insufficientSpaceDisablesInstallAndExposesShortfall() {
     let requirement = AppModelInstallRequirement(
       probePath: "/volume",

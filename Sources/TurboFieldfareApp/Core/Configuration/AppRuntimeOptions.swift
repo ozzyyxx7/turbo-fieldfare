@@ -101,6 +101,7 @@ public struct AppRuntimeOptions: Equatable, Sendable {
         case 16: "16, Default"
         case 24: "24, +0.8 GB"
         case 32: "32, +1.61 GB"
+        case 64: "64, +4.84 GB, Experimental"
         default: "\(slots)"
         }
     }

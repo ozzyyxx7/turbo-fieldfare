@@ -44,4 +44,27 @@ import Testing
             fileExists: { _ in false })
         #expect(result.path == "/support/TurboFieldfare/gemma4.gturbo")
     }
+
+    @Test func superGemmaUsesAnIndependentPackagePath() {
+        let files: Set<String> = ["/repo/Package.swift", "/repo/Sources/TurboFieldfareApp/Mac"]
+        let result = AppModelLocation.resolve(
+            explicitURL: nil,
+            executableURL: nil,
+            currentDirectoryURL: URL(fileURLWithPath: "/repo"),
+            applicationSupportURL: URL(fileURLWithPath: "/support"),
+            installFileName: AppModelInstallDescriptor.superGemma.installFileName,
+            fileExists: files.contains)
+        #expect(result.path == "/repo/scratch/supergemma4.gturbo")
+    }
+
+    @Test func superGemmaUsesAnIndependentApplicationSupportPath() {
+        let result = AppModelLocation.resolve(
+            explicitURL: nil,
+            executableURL: URL(fileURLWithPath: "/Applications/TurboFieldfareMac"),
+            currentDirectoryURL: URL(fileURLWithPath: "/"),
+            applicationSupportURL: URL(fileURLWithPath: "/support"),
+            installFileName: AppModelInstallDescriptor.superGemma.installFileName,
+            fileExists: { _ in false })
+        #expect(result.path == "/support/TurboFieldfare/supergemma4.gturbo")
+    }
 }

@@ -1,9 +1,12 @@
+import TurboFieldfare
+
 public struct Args: Equatable, Sendable {
     public var model: String
     public var prompt: String?
     public var messagesFile: String?
     public var maxNew: Int
     public var maxContext: Int
+    public var expertCacheSlots: Int
     public var temperature: Float
     public var topK: Int?
     public var topP: Float?
@@ -17,6 +20,7 @@ public struct Args: Equatable, Sendable {
                 messagesFile: String? = nil,
                 maxNew: Int = 1_024,
                 maxContext: Int = 4096,
+                expertCacheSlots: Int = 16,
                 temperature: Float = 0.2,
                 topK: Int? = 64,
                 topP: Float? = 0.95,
@@ -29,6 +33,7 @@ public struct Args: Equatable, Sendable {
         self.messagesFile = messagesFile
         self.maxNew = maxNew
         self.maxContext = maxContext
+        self.expertCacheSlots = expertCacheSlots
         self.temperature = temperature
         self.topK = topK
         self.topP = topP
@@ -75,6 +80,7 @@ extension Args {
     options:
       --max-new <int>           Generated-token limit (default 1024).
       --max-context <int>       Context limit in tokens (default 4096).
+      --expert-cache-slots <n>  8, 16, 24, 32, or experimental 64 (default 16).
       --temperature <float>     Sampling temperature (default 0.2; 0 = greedy).
       --top-k <int>             Top-k truncation, 1...256 (default 64; 0 = off).
       --top-p <float>           Nucleus truncation (default 0.95).
@@ -91,6 +97,7 @@ extension Args {
         var messagesFile: String?
         var maxNew = 1_024
         var maxContext = 4096
+        var expertCacheSlots = 16
         var temperature: Float = 0.2
         var topK: Int? = 64
         var topP: Float? = 0.95
@@ -126,6 +133,14 @@ extension Args {
                     throw ArgsError.invalidValue(flag: flag, value: value)
                 }
                 maxContext = parsed
+            case "--expert-cache-slots":
+                let value = try takeValue(argv, &index, flag: flag)
+                guard let parsed = Int(value),
+                      RuntimeConfiguration.allowedExpertCacheSlots.contains(
+                          parsed) else {
+                    throw ArgsError.invalidValue(flag: flag, value: value)
+                }
+                expertCacheSlots = parsed
             case "--temperature":
                 let value = try takeValue(argv, &index, flag: flag)
                 guard let parsed = Float(value), parsed >= 0 else {
@@ -178,6 +193,7 @@ extension Args {
                     messagesFile: messagesFile,
                     maxNew: maxNew,
                     maxContext: maxContext,
+                    expertCacheSlots: expertCacheSlots,
                     temperature: temperature,
                     topK: topK,
                     topP: topP,

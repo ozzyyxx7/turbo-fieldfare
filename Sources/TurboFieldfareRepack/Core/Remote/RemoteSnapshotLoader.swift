@@ -7,6 +7,7 @@ struct RemoteSnapshot {
     let remoteFiles: [String: RemoteFileInfo]
     let resolvedCommit: String
     let metadataDirectory: String
+    let matchedSourceProfile: SupportedModelSource.Profile?
 }
 
 enum RemoteSnapshotLoader {
@@ -39,7 +40,11 @@ enum RemoteSnapshotLoader {
                                         audit: audit)
 
         let metadata = try IndexLoader.load(snapshotDir: metadataDirectory)
-        if requireKnownSource && SourceFingerprint.modelID(forIndexSha256: metadata.indexSha256Hex) == nil {
+        let matchedSourceProfile = SourceFingerprint.profile(
+            repoID: remote.repoID,
+            resolvedCommit: indexInfo.resolvedCommit,
+            indexSha256: metadata.indexSha256Hex)
+        if requireKnownSource, matchedSourceProfile == nil {
             throw RepackError.sourceFingerprintRejected(path: metadata.indexPath,
                                                         sha256: metadata.indexSha256Hex)
         }
@@ -97,6 +102,7 @@ enum RemoteSnapshotLoader {
                               shardHeaders: headers,
                               remoteFiles: files,
                               resolvedCommit: indexInfo.resolvedCommit,
-                              metadataDirectory: metadataDirectory)
+                              metadataDirectory: metadataDirectory,
+                              matchedSourceProfile: matchedSourceProfile)
     }
 }

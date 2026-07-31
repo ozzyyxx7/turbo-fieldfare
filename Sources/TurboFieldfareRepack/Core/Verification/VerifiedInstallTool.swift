@@ -48,13 +48,23 @@ public enum VerifiedInstallTool {
                                                 sha256: actualSha))
         }
         let unexpectedEntries = try findUnexpectedEntries(root: root, manifest: manifest)
+        let sourceIndexSHA256 = manifest.sourceSnapshotHash.flatMap {
+            $0.lowercased().hasPrefix("sha256:")
+                ? String($0.dropFirst("sha256:".count))
+                : nil
+        }
+        let sourceProfile = sourceIndexSHA256.flatMap {
+            SourceFingerprint.profile(
+                repoID: manifest.modelID,
+                indexSha256: $0)
+        }
 
         let receiptData = try VerifiedInstallReceiptWriter.encode(
             outputDir: root.path,
             manifestSha256: manifestSha,
             manifestSize: manifestSize,
-            sourceRepoID: nil,
-            sourceRevision: manifest.sourceSnapshotHash,
+            sourceRepoID: sourceProfile?.repoID,
+            sourceRevision: sourceProfile?.revision ?? manifest.sourceSnapshotHash,
             toolVersion: "TurboFieldfareRepack verify-install",
             files: files)
         let receiptPath = root.appendingPathComponent(VerifiedInstallReceiptWriter.fileName).path
@@ -78,6 +88,7 @@ public enum VerifiedInstallTool {
     }
 
     private struct Manifest: Decodable {
+        let modelID: String
         let files: [String: ManifestFileEntry]
         let expertsPerLayer: Int
         let numLayers: Int

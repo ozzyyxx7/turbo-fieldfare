@@ -107,6 +107,12 @@ final class MockLifecycleInferenceClient: AppModelLifecycleClient, @unchecked Se
         return ensureLoadedCalls.count
     }
 
+    func unloadStartCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return unloadStartedCount
+    }
+
     func waitForUnloadStart() async {
         for _ in 0..<200 {
             if unloadHasStarted { return }

@@ -131,13 +131,16 @@ swift build -c release
 ```
 
 Build the complete package so the app and its sibling decode service are both
-available. When launched from this checkout, the app stores the model in
-`scratch/gemma4.gturbo`.
+available. The right-side **Variant** picker offers the stock Gemma checkpoint
+and the separately pinned SuperGemma checkpoint. When launched from this
+checkout, the app stores them in `scratch/gemma4.gturbo` and
+`scratch/supergemma4.gturbo`, respectively.
 
 #### Install the model
 
 On first launch, the app checks the available storage and shows the download
-and installed sizes. Choose **Download** to begin.
+and installed sizes. Select a variant, then choose **Download** to begin. The
+stock model remains the default, and the selection is remembered.
 
 The installer never materializes the full source checkpoint. It streams the
 required byte ranges from the pinned Hugging Face revision and repacks them
@@ -176,6 +179,18 @@ swift run -c release TurboFieldfareRepack \
   --overwrite
 ```
 
+Install SuperGemma into its independent model directory:
+
+```bash
+swift run -c release TurboFieldfareRepack \
+  --source supergemma \
+  --output scratch/supergemma4.gturbo \
+  --overwrite
+```
+
+See [SuperGemma support](docs/SUPERGEMMA.md) for the pinned source identity,
+verification steps, server command, and memory guidance.
+
 Continue a cancelled or interrupted download:
 
 ```bash
@@ -184,6 +199,8 @@ swift run -c release TurboFieldfareRepack \
   --overwrite \
   --resume
 ```
+
+Repeat `--source supergemma` when resuming a SuperGemma download.
 
 Remove saved download state:
 
@@ -241,7 +258,8 @@ swift run -c release TurboFieldfareCLI \
 This example deliberately requests a short greedy completion.
 
 Common generation options include `--max-context`, `--temperature`, `--top-k`,
-`--top-p`, `--repetition-penalty`, `--seed`, and repeatable `--stop` strings.
+`--top-p`, `--repetition-penalty`, `--seed`, repeatable `--stop` strings, and
+`--expert-cache-slots` for controlled 8/16/24/32/64-slot comparisons.
 The public CLI uses production runtime defaults. Run the following command for
 the complete option list:
 
@@ -311,7 +329,8 @@ correctness invariants.
 TurboFieldfare currently includes:
 
 - Remote streaming repack into the `.gturbo` model format
-- Instruction-tuned Gemma 4 26B-A4B with verified text-only chat formatting
+- Stock instruction-tuned Gemma 4 26B-A4B and the allowlisted SuperGemma
+  variant, each with verified text-only chat formatting
 - 4-bit MLX affine embedding, attention, shared-expert, and routed-expert
   weights, with an 8-bit router
 - Custom Metal kernels for quantized GEMV, attention, MoE, normalization,
@@ -325,8 +344,8 @@ TurboFieldfare currently includes:
   OpenAI-compatible server, and native SwiftUI/AppKit Mac app with a one-shot
   local decode service
 
-Current scope is text-only inference from the pinned Gemma 4 26B-A4B
-instruction checkpoint on Apple Silicon Macs with at least 8 GB of RAM.
+Current scope is text-only inference from the two pinned Gemma 4 26B-A4B
+checkpoints documented above on Apple Silicon Macs with at least 8 GB of RAM.
 
 ### Future work
 

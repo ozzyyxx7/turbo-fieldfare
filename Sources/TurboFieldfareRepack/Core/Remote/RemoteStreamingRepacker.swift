@@ -187,7 +187,10 @@ public final class RemoteStreamingRepacker {
         let plan = try RepackPlanner.plan(meta: snapshot.metadata,
                                           arch: snapshot.arch,
                                           shardHeaders: snapshot.shardHeaders,
-                                          outputDir: paths.partialDirectory)
+                                          outputDir: paths.partialDirectory,
+                                          sourceModelID:
+                                              snapshot.matchedSourceProfile?.repoID
+                                              ?? options.repoID)
         let rangePlan = try RangeCopyPlanner.plan(repackPlan: plan,
                                                   rangeChunkBytes: options.rangeChunkBytes,
                                                   layoutMode: "identity",
@@ -536,6 +539,10 @@ public final class RemoteStreamingRepacker {
                     throw error
                 }
                 continue
+            }
+            guard info.resolvedCommit == snapshot.resolvedCommit else {
+                throw RepackError.remoteProtocolInvalid(
+                    detail: "tokenizer sidecar \(file.name) commit differs from index commit")
             }
             let dst = (tokenizerDir as NSString).appendingPathComponent(file.name)
             try await pinned.fetchSmallFile(filename: file.name,

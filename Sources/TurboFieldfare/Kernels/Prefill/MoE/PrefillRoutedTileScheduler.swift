@@ -40,6 +40,17 @@ struct PrefillRoutedTileSchedulerConfig: Sendable, Equatable {
         guard slotCount > 0, reservedHits >= 0 else { return false }
         return (maxPendingDepth + 1) * tileExperts + reservedHits <= slotCount
     }
+
+    func fitted(toSlotCount slotCount: Int) -> PrefillRoutedTileSchedulerConfig? {
+        guard slotCount > 0 else { return nil }
+        let concurrentTileCount = maxPendingDepth + 1
+        let fittedTileExperts = min(tileExperts, slotCount / concurrentTileCount)
+        guard fittedTileExperts > 0 else { return nil }
+        let fitted = PrefillRoutedTileSchedulerConfig(
+            maxPendingDepth: maxPendingDepth,
+            tileExperts: fittedTileExperts)
+        return fitted.fitsSlotBudget(slotCount: slotCount) ? fitted : nil
+    }
 }
 
 struct PrefillRoutedTileScheduler: Sendable, Equatable {

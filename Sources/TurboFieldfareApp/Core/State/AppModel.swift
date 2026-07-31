@@ -42,7 +42,11 @@ public final class AppModel {
     public private(set) var isCancellationPending: Bool = false
 
     private let client: any AppInferenceClient
-    private let installer: any AppModelInstallerClient
+    private var installer: any AppModelInstallerClient
+    private let installerFactory:
+        @Sendable (AppModelInstallDescriptor) -> any AppModelInstallerClient
+    private let modelLocationResolver:
+        @Sendable (AppModelInstallDescriptor) -> URL
     private var runTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var installTask: Task<Void, Never>?
@@ -61,14 +65,56 @@ public final class AppModel {
 
     public init(modelDirectory: URL? = nil,
                 client: any AppInferenceClient = RealInferenceClient(),
-                installer: any AppModelInstallerClient = RepackModelInstallerClient(),
+                installer: (any AppModelInstallerClient)? = nil,
+                installerFactory:
+                    (@Sendable (AppModelInstallDescriptor)
+                        -> any AppModelInstallerClient)? = nil,
                 memorySampler: AppMemorySampler = AppMemorySampler(),
-                settingsPersistenceEnabled: Bool = false) {
-        let directory = (modelDirectory ?? AppModelLocation.defaultURL()).standardizedFileURL
+                settingsPersistenceEnabled: Bool = false,
+                modelLocationResolver:
+                    (@Sendable (AppModelInstallDescriptor) -> URL)? = nil) {
+        let resolvedModelLocation:
+            @Sendable (AppModelInstallDescriptor) -> URL =
+            modelLocationResolver ?? {
+                AppModelLocation.defaultURL(for: $0)
+            }
+        let requestedDescriptor = installer?.descriptor ?? .default
+        let requestedDirectory = (
+            modelDirectory
+                ?? resolvedModelLocation(requestedDescriptor)
+        ).standardizedFileURL
         let installETAClock = SuspendingClock()
-        let settings = settingsPersistenceEnabled
-            ? MacAppSettingsFileStore.loadOrCreate(forModelDirectory: directory)
+        let requestedSettings = settingsPersistenceEnabled
+            ? MacAppSettingsFileStore.loadOrCreate(
+                forModelDirectory: requestedDirectory)
             : MacAppSettings()
+        let selectedDescriptor: AppModelInstallDescriptor
+        if installer == nil, modelDirectory == nil {
+            selectedDescriptor = AppModelInstallDescriptor.all.first {
+                $0.id == requestedSettings.resolvedModelSourceID
+            } ?? .default
+        } else {
+            selectedDescriptor = requestedDescriptor
+        }
+        let resolvedInstallerFactory:
+            @Sendable (AppModelInstallDescriptor) -> any AppModelInstallerClient =
+            installerFactory ?? {
+                RepackModelInstallerClient(descriptor: $0)
+            }
+        let initialInstaller = installer
+            ?? resolvedInstallerFactory(selectedDescriptor)
+        let directory = (
+            modelDirectory
+                ?? resolvedModelLocation(selectedDescriptor)
+        ).standardizedFileURL
+        let settingsURL = MacAppSettingsFileStore.fileURL(
+            forModelDirectory: directory)
+        let requestedSettingsURL = MacAppSettingsFileStore.fileURL(
+            forModelDirectory: requestedDirectory)
+        let settings = settingsPersistenceEnabled
+            && settingsURL != requestedSettingsURL
+            ? MacAppSettingsFileStore.loadOrCreate(forModelDirectory: directory)
+            : requestedSettings
         self.modelPathText = directory.path
         self.runtimeOptions = AppRuntimeOptions(
             expertCacheSlots: settings.expertCacheSlots,
@@ -79,9 +125,13 @@ public final class AppModel {
         self.topK = settings.topK
         self.topPEnabled = settings.topPEnabled
         self.topP = settings.topP
-        self.installationStatus = AppModelInstallationProbe.status(at: directory)
+        self.installationStatus = AppModelInstallationProbe.status(
+            at: directory,
+            descriptor: initialInstaller.descriptor)
         self.client = client
-        self.installer = installer
+        self.installer = initialInstaller
+        self.installerFactory = resolvedInstallerFactory
+        self.modelLocationResolver = resolvedModelLocation
         self.memorySampler = memorySampler
         self.settingsPersistenceEnabled = settingsPersistenceEnabled
         self.installETAClock = installETAClock
@@ -120,6 +170,16 @@ public final class AppModel {
     public var requiresModelInstallation: Bool { !isModelInstalled }
 
     public var installDescriptor: AppModelInstallDescriptor { installer.descriptor }
+
+    public var supportedInstallDescriptors: [AppModelInstallDescriptor] {
+        AppModelInstallDescriptor.all
+    }
+
+    public var canSelectInstallDescriptor: Bool {
+        !isRunning && !loadState.isLoading && !isInstallingModel
+            && installState != .cancelling && installState != .discarding
+            && unloadTask == nil
+    }
 
     public var installRequirement: AppModelInstallRequirement? {
         installReadiness.requirement
@@ -267,13 +327,26 @@ public final class AppModel {
     }
 
     public func setModelURL(_ url: URL) {
+        setModelURL(
+            url,
+            restorePersistedSettings: true,
+            forceReset: false)
+    }
+
+    private func setModelURL(
+        _ url: URL,
+        restorePersistedSettings: Bool,
+        forceReset: Bool
+    ) {
         guard !isRunning else { return }
         let path = url.standardizedFileURL.path
-        guard path != modelPathText else { return }
+        guard forceReset || path != modelPathText else { return }
 
         modelPathText = path
-        applyPersistedSettings(
-            forModelDirectory: URL(fileURLWithPath: path, isDirectory: true))
+        if restorePersistedSettings {
+            applyPersistedSettings(
+                forModelDirectory: URL(fileURLWithPath: path, isDirectory: true))
+        }
         loadGeneration &+= 1
         loadTask?.cancel()
         loadTask = nil
@@ -290,7 +363,9 @@ public final class AppModel {
         diagnostics = nil
         error = nil
         phase = .idle
-        installationStatus = AppModelInstallationProbe.status(at: URL(fileURLWithPath: path))
+        installationStatus = AppModelInstallationProbe.status(
+            at: URL(fileURLWithPath: path),
+            descriptor: installer.descriptor)
         refreshInstallReadiness()
 
         if let lifecycle = client as? AppModelLifecycleClient {
@@ -302,6 +377,23 @@ public final class AppModel {
             }
             unloadTask = task
         }
+    }
+
+    public func selectInstallDescriptor(id: String) {
+        guard canSelectInstallDescriptor,
+              let descriptor = AppModelInstallDescriptor.all.first(
+                  where: { $0.id == id }),
+              descriptor != installer.descriptor else {
+            return
+        }
+
+        installer.cancel()
+        installer = installerFactory(descriptor)
+        setModelURL(
+            modelLocationResolver(descriptor),
+            restorePersistedSettings: false,
+            forceReset: true)
+        persistSettings()
     }
 
     public func loadModel() {
@@ -616,6 +708,7 @@ public final class AppModel {
     private func persistSettings() {
         guard settingsPersistenceEnabled else { return }
         let settings = MacAppSettings(
+            modelSourceID: installer.descriptor.id,
             contextTokens: maxContextTokens,
             expertCacheSlots: runtimeOptions.expertCacheSlots,
             temperature: temperature,

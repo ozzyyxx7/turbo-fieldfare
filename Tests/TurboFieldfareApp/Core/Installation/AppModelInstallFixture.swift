@@ -3,17 +3,34 @@ import Foundation
 import TurboFieldfare
 @testable import TurboFieldfareAppCore
 
-func makeCompleteModelInstall(_ tag: String) throws -> URL {
+func makeCompleteModelInstall(
+    _ tag: String,
+    descriptor: AppModelInstallDescriptor = .default
+) throws -> URL {
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("turbofieldfare-complete-\(tag)-\(UUID().uuidString).gturbo")
     let experts = directory.appendingPathComponent("packed_experts", isDirectory: true)
+    let tokenizer = directory.appendingPathComponent("tokenizer", isDirectory: true)
     try FileManager.default.createDirectory(at: experts, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
     try Data("{}".utf8).write(to: experts.appendingPathComponent("layout.json"))
+    try Data("{}".utf8).write(to: tokenizer.appendingPathComponent("tokenizer.json"))
+    try Data("{}".utf8).write(
+        to: tokenizer.appendingPathComponent("tokenizer_config.json"))
+    let emptyObjectHash = Sha256Verifier.hashData(Data("{}".utf8))
 
     let arch = ArchConfig.gemma4_26B_A4B
     var files: [String: Any] = [
         "model_weights.bin": ["size": 0, "sha256": String(repeating: "0", count: 64)],
         "packed_experts/layout.json": ["size": 2, "sha256": String(repeating: "0", count: 64)],
+        "tokenizer/tokenizer.json": [
+            "size": 2,
+            "sha256": emptyObjectHash,
+        ],
+        "tokenizer/tokenizer_config.json": [
+            "size": 2,
+            "sha256": emptyObjectHash,
+        ],
     ]
     for layer in 0..<arch.numLayers {
         files[String(format: "packed_experts/layer_%02d.bin", layer)] = [
@@ -26,8 +43,8 @@ func makeCompleteModelInstall(_ tag: String) throws -> URL {
         "versionMajor": 1,
         "versionMinor": 0,
         "flags": ["streamingPresent": true],
-        "modelID": "test/gemma-4-26b-a4b",
-        "sourceSnapshotHash": "sha256:" + AppModelInstallDescriptor.default.sourceIndexSHA256,
+        "modelID": descriptor.repoID,
+        "sourceSnapshotHash": "sha256:" + descriptor.sourceIndexSHA256,
         "quant": [
             "embedding": quantSlot(4),
             "attention": quantSlot(4),
@@ -71,6 +88,8 @@ func makeCompleteModelInstall(_ tag: String) throws -> URL {
         "schemaVersion": 1,
         "manifestSha256": manifestHash,
         "modelDirectoryPath": directory.standardizedFileURL.path,
+        "sourceRepoID": descriptor.repoID,
+        "sourceRevision": descriptor.revision,
         "verificationTimestamp": "2026-07-11T00:00:00Z",
         "toolVersion": "TurboFieldfareAppCoreTests",
         "files": [:],

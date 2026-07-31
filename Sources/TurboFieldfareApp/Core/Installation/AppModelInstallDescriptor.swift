@@ -2,7 +2,9 @@ import Foundation
 import TurboFieldfareRepackCore
 
 public struct AppModelInstallDescriptor: Equatable, Sendable {
+    public let id: String
     public let displayName: String
+    public let shortDisplayName: String
     public let repoID: String
     public let revision: String
     public let sourceIndexSHA256: String
@@ -10,6 +12,8 @@ public struct AppModelInstallDescriptor: Equatable, Sendable {
     public let installedBytes: UInt64
     public let rangeStagingBytes: UInt64
     public let reserveBytes: UInt64
+    public let installFileName: String
+    public let apiModelID: String
 
     public init(displayName: String,
                 repoID: String,
@@ -18,8 +22,14 @@ public struct AppModelInstallDescriptor: Equatable, Sendable {
                 approximateDownloadBytes: UInt64,
                 installedBytes: UInt64,
                 rangeStagingBytes: UInt64,
-                reserveBytes: UInt64) {
+                reserveBytes: UInt64,
+                id: String? = nil,
+                shortDisplayName: String? = nil,
+                installFileName: String = "gemma4.gturbo",
+                apiModelID: String? = nil) {
+        self.id = id ?? repoID
         self.displayName = displayName
+        self.shortDisplayName = shortDisplayName ?? displayName
         self.repoID = repoID
         self.revision = revision
         self.sourceIndexSHA256 = sourceIndexSHA256
@@ -27,21 +37,37 @@ public struct AppModelInstallDescriptor: Equatable, Sendable {
         self.installedBytes = installedBytes
         self.rangeStagingBytes = rangeStagingBytes
         self.reserveBytes = reserveBytes
+        self.installFileName = installFileName
+        self.apiModelID = apiModelID ?? repoID
     }
 
     public var requiredFreeBytes: UInt64 {
         installedBytes + rangeStagingBytes + reserveBytes
     }
 
-    public static let `default` = AppModelInstallDescriptor(
-        displayName: "Gemma 4 26B-A4B IT 4-bit",
-        repoID: "mlx-community/gemma-4-26b-a4b-it-4bit",
-        revision: "0d77464eeb233a2da68ebf9d7dc4edaac7db956d",
-        sourceIndexSHA256: "bf198c9f5ea6462addca1966e5dd669c407537a876e82cf06db9084c5c850b13",
-        approximateDownloadBytes: 14_620_479_420,
-        installedBytes: 14_291_921_884,
-        rangeStagingBytes: UInt64(RemoteChunkPolicy.defaultBytes),
-        reserveBytes: 1_073_741_824)
+    public init(profile: SupportedModelSource.Profile) {
+        self.init(
+            displayName: profile.displayName,
+            repoID: profile.repoID,
+            revision: profile.revision,
+            sourceIndexSHA256: profile.sourceIndexSHA256,
+            approximateDownloadBytes: profile.approximateDownloadBytes,
+            installedBytes: profile.installedBytes,
+            rangeStagingBytes: UInt64(RemoteChunkPolicy.defaultBytes),
+            reserveBytes: profile.reserveBytes,
+            id: profile.id,
+            shortDisplayName: profile.shortDisplayName,
+            installFileName: profile.installFileName,
+            apiModelID: profile.apiModelID)
+    }
+
+    public static let stock = AppModelInstallDescriptor(
+        profile: SupportedModelSource.stock)
+    public static let superGemma = AppModelInstallDescriptor(
+        profile: SupportedModelSource.superGemma)
+    public static let all = SupportedModelSource.all.map(
+        AppModelInstallDescriptor.init(profile:))
+    public static let `default` = stock
 }
 
 public struct AppModelInstallRequirement: Equatable, Sendable {

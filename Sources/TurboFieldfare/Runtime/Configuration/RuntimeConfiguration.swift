@@ -20,7 +20,10 @@ public enum RuntimeExpertCachePolicy: String, Codable, Sendable {
 }
 
 public struct RuntimeConfiguration: Sendable, Equatable {
-    public static let allowedExpertCacheSlots = [8, 16, 24, 32]
+    public static let standardExpertCacheSlots = [8, 16, 24, 32]
+    public static let experimentalExpertCacheSlots = [64]
+    public static let allowedExpertCacheSlots =
+        standardExpertCacheSlots + experimentalExpertCacheSlots
     public static let allowedPrefillChunkTokens = [32, 64, 128]
 
     public let expertCacheSlots: Int

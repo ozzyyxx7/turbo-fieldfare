@@ -3,19 +3,25 @@ import TurboFieldfareRepackCore
 
 private let usage = """
 Usage:
-  TurboFieldfareRepack --output <model.gturbo> [--overwrite] [--resume]
+  TurboFieldfareRepack --output <model.gturbo> [--source <stock|supergemma>] [--overwrite] [--resume]
   TurboFieldfareRepack --discard-partial --output <model.gturbo>
   TurboFieldfareRepack --verify-install --input-gturbo <model.gturbo>
   TurboFieldfareRepack --help
 
-The installer streams the supported Gemma 4 checkpoint from Hugging Face and
+The installer streams a pinned, supported Gemma 4 checkpoint from Hugging Face and
 repackages it without materializing the source checkpoint on disk. Set HF_TOKEN
 only if Hugging Face requests authentication. A cancelled or interrupted
 download can be continued with --resume or removed with --discard-partial.
+
+Sources:
+  stock        mlx-community Gemma 4 26B-A4B IT 4-bit (default)
+  supergemma   Jiunsong SuperGemma 4 26B-A4B Uncensored 4-bit v2
 """
 
 private struct Arguments {
     var output: String?
+    var source = SupportedModelSource.defaultProfile
+    var sourceWasSpecified = false
     var overwrite = false
     var resume = false
     var discardPartial = false
@@ -42,14 +48,23 @@ private struct Arguments {
             case "--verify-install":
                 parsed.verifyInstall = true
                 index += 1
-            case "--output", "--input-gturbo":
+            case "--output", "--input-gturbo", "--source":
                 guard index + 1 < values.count else {
                     throw ParseError.missingValue(flag)
                 }
                 if flag == "--output" {
                     parsed.output = values[index + 1]
-                } else {
+                } else if flag == "--input-gturbo" {
                     parsed.inputGTurbo = values[index + 1]
+                } else {
+                    guard let source = SupportedModelSource.profile(
+                        named: values[index + 1]) else {
+                        throw ParseError.invalidValue(
+                            flag: flag,
+                            value: values[index + 1])
+                    }
+                    parsed.source = source
+                    parsed.sourceWasSpecified = true
                 }
                 index += 2
             default:
@@ -64,8 +79,10 @@ private struct Arguments {
             guard parsed.output != nil else {
                 throw ParseError.missingRequired("--output")
             }
-            guard parsed.inputGTurbo == nil, !parsed.overwrite, !parsed.verifyInstall else {
-                throw ParseError.invalidMode("--discard-partial only accepts --output")
+            guard parsed.inputGTurbo == nil, !parsed.overwrite, !parsed.verifyInstall,
+                  !parsed.sourceWasSpecified else {
+                throw ParseError.invalidMode(
+                    "--discard-partial only accepts --output")
             }
             return parsed
         }
@@ -73,7 +90,8 @@ private struct Arguments {
             guard parsed.inputGTurbo != nil else {
                 throw ParseError.missingRequired("--input-gturbo")
             }
-            guard parsed.output == nil, !parsed.overwrite, !parsed.resume else {
+            guard parsed.output == nil, !parsed.overwrite, !parsed.resume,
+                  !parsed.sourceWasSpecified else {
                 throw ParseError.invalidMode("verification accepts only --input-gturbo")
             }
         } else {
@@ -93,6 +111,7 @@ private enum ParseError: Error, CustomStringConvertible {
     case unknown(String)
     case missingValue(String)
     case missingRequired(String)
+    case invalidValue(flag: String, value: String)
     case invalidMode(String)
 
     var description: String {
@@ -101,6 +120,8 @@ private enum ParseError: Error, CustomStringConvertible {
         case .unknown(let flag): return "unknown argument: \(flag)"
         case .missingValue(let flag): return "missing value for \(flag)"
         case .missingRequired(let flag): return "missing required argument: \(flag)"
+        case .invalidValue(let flag, let value):
+            return "invalid value for \(flag): \(value)"
         case .invalidMode(let message): return message
         }
     }
@@ -147,14 +168,15 @@ private func run(_ values: [String]) async -> Int32 {
     }
 
     guard let output = arguments.output else { return 2 }
-    let options = SupportedModelSource.installOptions(
+    let options = arguments.source.installOptions(
         outputDirectory: URL(fileURLWithPath: output),
         overwrite: arguments.overwrite,
         token: ProcessInfo.processInfo.environment["HF_TOKEN"],
         resume: arguments.resume)
     do {
         let result = try await RemoteStreamingRepacker(options: options).run()
-        print("Installed \(SupportedModelSource.displayName)")
+        print("Installed \(arguments.source.displayName)")
+        print("Source repository: \(arguments.source.repoID)")
         print("Source revision: \(result.resolvedCommit)")
         print("Model: \(result.outputDir)")
         return 0
