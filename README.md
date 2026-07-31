@@ -282,8 +282,8 @@ swift build -c release --product TurboFieldfareServer
 
 It listens on `http://127.0.0.1:8080/v1` and supports Chat Completions,
 streaming, function tools, and single-prefix prompt reuse. The client must
-authorize and run every tool call. Keep the server on loopback; it has no
-remote authentication or TLS.
+authorize and run every tool call. Keep the server on loopback; bearer
+authentication is optional and off by default, and the endpoint has no TLS.
 
 See [Local server](docs/OPENAI_SERVER.md) for a test request, Python and
 OpenCode setup, prompt reuse, tool handling, and the supported API subset.

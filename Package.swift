@@ -84,7 +84,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "TurboFieldfareServer",
-            dependencies: ["TurboFieldfareServerCore"],
+            dependencies: ["TurboFieldfare", "TurboFieldfareServerCore"],
             path: "Sources/TurboFieldfareServer/Command"
         ),
         .executableTarget(

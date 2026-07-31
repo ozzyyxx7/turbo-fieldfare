@@ -13,6 +13,7 @@ public actor TurboFieldfareHTTPServer {
     private let backend: any ServerInferenceBackend
     private let coordinator: ServerCoordinator
     private let heartbeatInterval: TimeAmount
+    private let bearerToken: String?
     private let childChannels = ChildChannelRegistry()
     private var channel: Channel?
     private var shutdownTask: Task<Void, any Error>?
@@ -20,12 +21,14 @@ public actor TurboFieldfareHTTPServer {
     public init(modelID: String,
                 queueLimit: Int,
                 backend: any ServerInferenceBackend,
+                bearerToken: String? = nil,
                 heartbeatInterval: TimeAmount = .seconds(5),
                 group: MultiThreadedEventLoopGroup = .init(numberOfThreads: 1)) {
         self.group = group
         self.modelID = modelID
         self.backend = backend
         self.coordinator = ServerCoordinator(queueLimit: queueLimit)
+        self.bearerToken = bearerToken
         self.heartbeatInterval = heartbeatInterval
     }
 
@@ -34,6 +37,7 @@ public actor TurboFieldfareHTTPServer {
         let backend = self.backend
         let coordinator = self.coordinator
         let heartbeatInterval = self.heartbeatInterval
+        let bearerToken = self.bearerToken
         let childChannels = self.childChannels
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 16)
@@ -48,6 +52,7 @@ public actor TurboFieldfareHTTPServer {
                         modelID: modelID,
                         backend: backend,
                         coordinator: coordinator,
+                        bearerToken: bearerToken,
                         heartbeatInterval: heartbeatInterval,
                         childChannels: childChannels))
                 }
@@ -116,21 +121,25 @@ private final class ServerHTTPHandler: ChannelInboundHandler, @unchecked Sendabl
     private let modelID: String
     private let backend: any ServerInferenceBackend
     private let coordinator: ServerCoordinator
+    private let bearerToken: String?
     private let heartbeatInterval: TimeAmount
     private let childChannels: ChildChannelRegistry
     private var head: HTTPRequestHead?
     private var body = ByteBuffer()
     private var oversized = false
+    private var unauthorized = false
     private var activeTask: Task<Void, Never>?
 
     init(modelID: String,
          backend: any ServerInferenceBackend,
          coordinator: ServerCoordinator,
+         bearerToken: String?,
          heartbeatInterval: TimeAmount,
          childChannels: ChildChannelRegistry) {
         self.modelID = modelID
         self.backend = backend
         self.coordinator = coordinator
+        self.bearerToken = bearerToken
         self.heartbeatInterval = heartbeatInterval
         self.childChannels = childChannels
     }
@@ -141,8 +150,12 @@ private final class ServerHTTPHandler: ChannelInboundHandler, @unchecked Sendabl
             self.head = head
             body.clear()
             oversized = false
+            unauthorized = !isAuthorized(head)
         case .body(var part):
-            if body.readableBytes + part.readableBytes > TurboFieldfareHTTPServer.maximumBodyBytes {
+            if unauthorized {
+                return
+            } else if body.readableBytes + part.readableBytes
+                        > TurboFieldfareHTTPServer.maximumBodyBytes {
                 oversized = true
             } else {
                 body.writeBuffer(&part)
@@ -150,6 +163,12 @@ private final class ServerHTTPHandler: ChannelInboundHandler, @unchecked Sendabl
         case .end:
             guard let head else { return }
             self.head = nil
+            if unauthorized {
+                writeError(context, status: .unauthorized,
+                           OpenAIErrorEnvelope(message: "invalid or missing bearer token",
+                                               code: "unauthorized"))
+                return
+            }
             if oversized {
                 writeError(context, status: .payloadTooLarge,
                            OpenAIErrorEnvelope(message: "request body is too large",
@@ -199,6 +218,11 @@ private final class ServerHTTPHandler: ChannelInboundHandler, @unchecked Sendabl
                        OpenAIErrorEnvelope(message: "route not found",
                                            code: "not_found"))
         }
+    }
+
+    private func isAuthorized(_ head: HTTPRequestHead) -> Bool {
+        guard let bearerToken else { return true }
+        return head.headers.first(name: "authorization") == "Bearer \(bearerToken)"
     }
 
     private func handleCompletion(body: ByteBuffer,

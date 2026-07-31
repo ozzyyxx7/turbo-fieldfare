@@ -162,6 +162,92 @@ struct HTTPServerTests {
         try await server.shutdown()
     }
 
+    @Test func optionalBearerTokenProtectsEveryEndpoint() async throws {
+        let server = TurboFieldfareHTTPServer(
+            modelID: "test-model",
+            queueLimit: 1,
+            backend: ScriptedServerBackend(),
+            bearerToken: "private-test-token")
+        let channel = try await server.start(port: 0)
+        let port = try #require(channel.localAddress?.port)
+        let healthURL = URL(string: "http://127.0.0.1:\(port)/health")!
+        let modelsURL = URL(string: "http://127.0.0.1:\(port)/v1/models")!
+        let chatURL = URL(
+            string: "http://127.0.0.1:\(port)/v1/chat/completions")!
+
+        for url in [healthURL, modelsURL] {
+            let (_, unauthorized) = try await URLSession.shared.data(from: url)
+            #expect((unauthorized as? HTTPURLResponse)?.statusCode == 401)
+        }
+
+        var unauthorizedChat = URLRequest(url: chatURL)
+        unauthorizedChat.httpMethod = "POST"
+        unauthorizedChat.setValue(
+            "application/json",
+            forHTTPHeaderField: "content-type")
+        unauthorizedChat.httpBody = Data(#"""
+        {"model":"test-model","messages":[{"role":"user","content":"hi"}]}
+        """#.utf8)
+        let (_, unauthorizedChatResponse) = try await URLSession.shared.data(
+            for: unauthorizedChat)
+        #expect(
+            (unauthorizedChatResponse as? HTTPURLResponse)?.statusCode == 401)
+
+        var wrongTokenRequest = URLRequest(url: modelsURL)
+        wrongTokenRequest.setValue(
+            "Bearer wrong-token",
+            forHTTPHeaderField: "authorization")
+        let (_, wrongTokenResponse) = try await URLSession.shared.data(
+            for: wrongTokenRequest)
+        #expect((wrongTokenResponse as? HTTPURLResponse)?.statusCode == 401)
+
+        var oversizedRequest = URLRequest(url: healthURL)
+        oversizedRequest.httpMethod = "POST"
+        oversizedRequest.httpBody = Data(
+            repeating: 0x41,
+            count: TurboFieldfareHTTPServer.maximumBodyBytes + 1)
+        let (_, oversizedUnauthorized) = try await URLSession.shared.data(
+            for: oversizedRequest)
+        #expect((oversizedUnauthorized as? HTTPURLResponse)?.statusCode == 401)
+
+        var healthRequest = URLRequest(url: healthURL)
+        healthRequest.setValue(
+            "Bearer private-test-token",
+            forHTTPHeaderField: "authorization")
+        let (healthData, authorizedHealth) = try await URLSession.shared.data(
+            for: healthRequest)
+        #expect((authorizedHealth as? HTTPURLResponse)?.statusCode == 200)
+        #expect(
+            String(decoding: healthData, as: UTF8.self)
+                .contains(#""status":"ok""#))
+
+        var modelsRequest = URLRequest(url: modelsURL)
+        modelsRequest.setValue(
+            "Bearer private-test-token",
+            forHTTPHeaderField: "authorization")
+        let (modelsData, authorizedModels) = try await URLSession.shared.data(
+            for: modelsRequest)
+        #expect((authorizedModels as? HTTPURLResponse)?.statusCode == 200)
+        #expect(
+            String(decoding: modelsData, as: UTF8.self)
+                .contains("test-model"))
+
+        var chatRequest = unauthorizedChat
+        chatRequest.setValue(
+            "Bearer private-test-token",
+            forHTTPHeaderField: "authorization")
+        let (chatData, authorizedChat) = try await URLSession.shared.data(
+            for: chatRequest)
+        #expect((authorizedChat as? HTTPURLResponse)?.statusCode == 200)
+        let chatObject = try #require(
+            JSONSerialization.jsonObject(with: chatData) as? [String: Any])
+        let choices = try #require(chatObject["choices"] as? [[String: Any]])
+        let message = try #require(choices[0]["message"] as? [String: Any])
+        #expect(message["content"] as? String == "hello")
+
+        try await server.shutdown()
+    }
+
     @Test func streamingUsesStableShapeAndDoneMarker() async throws {
         let server = TurboFieldfareHTTPServer(
             modelID: "test-model",

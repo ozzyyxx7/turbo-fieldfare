@@ -61,6 +61,8 @@ public func run(args: Args,
             return errored(stderr, "no Metal device", 1)
         }
         let context = try MetalContext()
+        let modelLease = try ModelProcessLease.acquire(owner: "TurboFieldfareCLI")
+        defer { modelLease.release() }
         let model = try Model.load(
             directoryURL: modelURL,
             device: context.device,

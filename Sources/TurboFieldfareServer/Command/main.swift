@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import TurboFieldfare
 import TurboFieldfareServerCore
 
 let arguments: ServerArguments
@@ -14,16 +15,25 @@ do {
 }
 
 do {
-    let signals = ServerTerminationSignals()
+    let modelLease = try ModelProcessLease.acquire(owner: "TurboFieldfareServer")
+    defer { modelLease.release() }
     let modelURL = URL(fileURLWithPath: arguments.model).standardizedFileURL
     let backend = try await ServerModelSession.load(
         modelDirectory: modelURL,
         maxContext: arguments.maxContext,
+        modelProcessLease: modelLease,
         promptCacheMode: arguments.promptCacheMode)
+    // Keep the default SIGINT/SIGTERM action while the model is loading so a
+    // failed managed startup can terminate promptly. Graceful signal handling
+    // is needed only after the backend is ready to serve requests.
+    let signals = ServerTerminationSignals()
+    let bearerToken = ProcessInfo.processInfo.environment["TURBOFIELDFARE_BEARER_TOKEN"]
+        .flatMap { $0.isEmpty ? nil : $0 }
     let server = TurboFieldfareHTTPServer(
         modelID: arguments.modelID,
         queueLimit: arguments.queueLimit,
-        backend: backend)
+        backend: backend,
+        bearerToken: bearerToken)
     _ = try await server.start(port: arguments.port)
     print("TurboFieldfareServer ready at http://127.0.0.1:\(arguments.port) model=\(arguments.modelID) context=\(arguments.maxContext) prompt_cache=\(arguments.promptCacheMode.rawValue)")
 

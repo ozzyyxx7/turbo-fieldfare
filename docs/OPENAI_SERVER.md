@@ -1,8 +1,8 @@
 # Local OpenAI-compatible server
 
 `TurboFieldfareServer` exposes a local Chat Completions API for one Gemma
-model. It binds to `127.0.0.1` without authentication or TLS. Do not expose it
-through a proxy or tunnel.
+model. It binds to `127.0.0.1` and has no TLS. Authentication is off by
+default; do not expose it through a proxy or tunnel.
 
 ## Start the server
 
@@ -26,6 +26,11 @@ swift build -c release --product TurboFieldfareServer
 The server loads the model before opening the port. Wait for
 `TurboFieldfareServer ready`, then keep the process running while clients use
 it.
+
+To require bearer authentication on every endpoint, set a non-empty
+`TURBOFIELDFARE_BEARER_TOKEN` in the server process environment. Clients must
+then send `Authorization: Bearer <token>`. The Codex SuperGemma integration
+generates and manages a private per-launch token automatically.
 
 For SuperGemma, select its independent installation and API identifier:
 
@@ -70,7 +75,8 @@ By default, the server runs one generation and queues up to four requests. Use
 ## Connect a client
 
 The base URL is `http://127.0.0.1:8080/v1`. Some client libraries require an
-API key, but the server ignores it.
+API key. With default authentication disabled, the server ignores it. If
+`TURBOFIELDFARE_BEARER_TOKEN` is set, use that exact value as the API key.
 
 Python:
 

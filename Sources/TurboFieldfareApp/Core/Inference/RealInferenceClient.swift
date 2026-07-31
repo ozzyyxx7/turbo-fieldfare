@@ -156,6 +156,8 @@ actor RealInferenceSession {
     private var tokenizerDirectoryCache = TokenizerDirectoryCache()
     private var runner: RealForwardRunner?
     private var scratch: RawCompletionScratch?
+    // Declare last so implicit actor teardown releases model storage first.
+    private var modelProcessLease: ModelProcessLease?
 
     func ensureLoaded(key: SessionLoadKey,
                       onState: @Sendable (AppModelLoadState) -> Void) async throws {
@@ -164,6 +166,7 @@ actor RealInferenceSession {
         runner = nil
         scratch = nil
         loadedKey = nil
+        modelProcessLease = nil
 
         let start = Date()
         do {
@@ -194,6 +197,8 @@ actor RealInferenceSession {
                 context = try MetalContext()
                 ctx = context
             }
+            let acquiredLease = try ModelProcessLease.acquire(
+                owner: "TurboFieldfareDecodeService")
             let loadedModel = try Model.load(
                 directoryURL: key.directory,
                 device: context.device,
@@ -215,6 +220,7 @@ actor RealInferenceSession {
             runner = loadedRunner
             scratch = loadedScratch
             loadedKey = key
+            modelProcessLease = acquiredLease
             onState(.ready(modelDirectory: key.directory,
                            loadSeconds: Date().timeIntervalSince(start)))
         } catch is CancellationError {
@@ -255,6 +261,7 @@ actor RealInferenceSession {
     func unload() {
         runner = nil
         scratch = nil
+        modelProcessLease = nil
         tokenizer = nil
         tokenizerDirectoryCache.clear()
         loadedKey = nil

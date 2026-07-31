@@ -132,6 +132,7 @@ import TurboFieldfareDecodeProtocol
                 return
             }
         }
+        await client.unload()
     }
 
     private static func nextCommand(_ commands: DecodeCommandQueue)

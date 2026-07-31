@@ -63,6 +63,50 @@ swift run -c release TurboFieldfareCLI \
   --temperature 0
 ```
 
+## Codex agent integration
+
+The checkout includes a user-skill and zero-dependency STDIO MCP bridge at
+`Integrations/Codex/supergemma-local`. From the repository root, build the
+release server, link the skill, and register the bridge:
+
+```bash
+swift build -c release --product TurboFieldfareServer
+repo_root="$(pwd -P)"
+node_bin="$(command -v node)"
+mkdir -p "$HOME/.agents/skills"
+ln -s "$repo_root/Integrations/Codex/supergemma-local" \
+  "$HOME/.agents/skills/supergemma-local"
+codex mcp add supergemma -- \
+  "$node_bin" \
+  "$repo_root/Integrations/Codex/supergemma-local/scripts/mcp-server.mjs"
+```
+
+The link and registration commands intentionally fail if entries with those
+names already exist. Inspect and update an existing installation rather than
+overwriting it. Add these keys inside the generated
+`[mcp_servers.supergemma]` section in `~/.codex/config.toml` so first load and
+long requests have enough time:
+
+```toml
+startup_timeout_sec = 10
+tool_timeout_sec = 900
+enabled_tools = ["ask_supergemma", "supergemma_status", "stop_supergemma"]
+```
+
+Verify registration with `codex mcp get supergemma --json`, then restart an
+already-open Codex surface once. Another Codex agent can explicitly invoke
+`$supergemma-local` and use:
+
+- `ask_supergemma` for a bounded reasoning, drafting, or code-review request.
+- `supergemma_status` for a read-only lifecycle check.
+- `stop_supergemma` to stop only the authenticated server that the bridge
+  started.
+
+The bridge uses a 4K context, starts the model lazily, authenticates every
+loopback request with a private per-launch token, and shares TurboFieldfare's
+per-user model lease with the server, CLI, and Mac app. Model output remains
+untrusted advisory text; the calling Codex agent must verify it before acting.
+
 ## Memory choices on a 16 GB Mac
 
 Start with 16 slots and a 4K context. The 8-slot option uses less memory and

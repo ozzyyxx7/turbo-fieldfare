@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build release products
         run: swift build -c release
-      - name: Run serial tests
+      - name: Run serial and Codex bridge tests
         run: Scripts/test.sh
       - name: Check Markdown links
         run: ruby Scripts/check_markdown_links.rb

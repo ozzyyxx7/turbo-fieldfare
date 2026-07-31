@@ -114,9 +114,12 @@ public actor ServerModelSession: ServerInferenceBackend {
     private let promptCacheMode: ServerPromptCacheMode
     private let promptCacheDomain: ServerPromptCacheDomain
     private var promptCache = ServerPromptCache()
+    // Declare last so implicit actor teardown releases model storage first.
+    private let modelProcessLease: ModelProcessLease
 
     public static func load(modelDirectory: URL,
                             maxContext: Int,
+                            modelProcessLease: ModelProcessLease,
                             promptCacheMode: ServerPromptCacheMode = .singlePrefix) async throws -> ServerModelSession {
         let tokenizerFolder = GFTokenizer.tokenizerFolder(forModelDirectory: modelDirectory)
         guard let tokenizerFolder else {
@@ -170,7 +173,8 @@ public actor ServerModelSession: ServerInferenceBackend {
                                   prefillConfig: runtime.prefillConfig,
                                   maxContext: maxContext,
                                   promptCacheMode: promptCacheMode,
-                                  promptCacheDomain: promptCacheDomain)
+                                  promptCacheDomain: promptCacheDomain,
+                                  modelProcessLease: modelProcessLease)
     }
 
     private init(context: MetalContext,
@@ -181,7 +185,8 @@ public actor ServerModelSession: ServerInferenceBackend {
                  prefillConfig: PrefillRuntimeConfig,
                  maxContext: Int,
                  promptCacheMode: ServerPromptCacheMode,
-                 promptCacheDomain: ServerPromptCacheDomain) {
+                 promptCacheDomain: ServerPromptCacheDomain,
+                 modelProcessLease: ModelProcessLease) {
         self.context = context
         self.model = model
         self.tokenizer = tokenizer
@@ -191,6 +196,7 @@ public actor ServerModelSession: ServerInferenceBackend {
         self.maxContext = maxContext
         self.promptCacheMode = promptCacheMode
         self.promptCacheDomain = promptCacheDomain
+        self.modelProcessLease = modelProcessLease
     }
 
     public func generate(

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SuperGemma Local"
+  short_description: "Use local SuperGemma for second opinions"
+  default_prompt: "Use $supergemma-local to get a focused second opinion on this task."
