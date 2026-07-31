@@ -47,21 +47,40 @@ public struct DecodeGenerationRequest: Codable, Sendable {
     public var maxNewTokens: Int
     public var maxContextTokens: Int
     public var temperature: Float
+    public var topKEnabled: Bool?
+    public var topK: Int?
+    public var topPEnabled: Bool?
+    public var topP: Float?
     public var repetitionPenalty: Float
     public var runtimeOptions: DecodeRuntimeOptions
     public var generationID: UUID
 
     public init(prompt: String, maxNewTokens: Int, maxContextTokens: Int,
-                temperature: Float, repetitionPenalty: Float = 1,
+                temperature: Float, topK: Int? = 64, topP: Float? = 0.95,
+                repetitionPenalty: Float = 1,
                 runtimeOptions: DecodeRuntimeOptions = DecodeRuntimeOptions(),
                 generationID: UUID = UUID()) {
         self.prompt = prompt
         self.maxNewTokens = maxNewTokens
         self.maxContextTokens = maxContextTokens
         self.temperature = temperature
+        self.topKEnabled = topK != nil
+        self.topK = topK
+        self.topPEnabled = topP != nil
+        self.topP = topP
         self.repetitionPenalty = repetitionPenalty
         self.runtimeOptions = runtimeOptions
         self.generationID = generationID
+    }
+
+    /// Missing enable flags are legacy frames from before sampling controls
+    /// crossed the decode-service boundary.
+    public var resolvedTopK: Int? {
+        topKEnabled == false ? nil : (topK ?? 64)
+    }
+
+    public var resolvedTopP: Float? {
+        topPEnabled == false ? nil : (topP ?? 0.95)
     }
 }
 

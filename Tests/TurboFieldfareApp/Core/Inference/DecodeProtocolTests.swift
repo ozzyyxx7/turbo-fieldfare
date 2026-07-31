@@ -91,6 +91,58 @@ import TurboFieldfareDecodeProtocol
         #expect(decoded.prefillTotal == 514)
     }
 
+    @Test func generationRequestRoundTripPreservesSamplingControls() throws {
+        for request in [
+            DecodeGenerationRequest(
+                prompt: "sample",
+                maxNewTokens: 8,
+                maxContextTokens: 4_096,
+                temperature: 0.7,
+                topK: 23,
+                topP: 0.81),
+            DecodeGenerationRequest(
+                prompt: "untruncated",
+                maxNewTokens: 8,
+                maxContextTokens: 4_096,
+                temperature: 0.7,
+                topK: nil,
+                topP: nil),
+        ] {
+            let decoded = try JSONDecoder().decode(
+                DecodeGenerationRequest.self,
+                from: JSONEncoder().encode(request))
+            #expect(decoded.resolvedTopK == request.topK)
+            #expect(decoded.resolvedTopP == request.topP)
+        }
+    }
+
+    @Test func legacyGenerationRequestRetainsHistoricalSamplingDefaults() throws {
+        let legacy = """
+        {
+          "prompt": "legacy",
+          "maxNewTokens": 8,
+          "maxContextTokens": 4096,
+          "temperature": 0.7,
+          "repetitionPenalty": 1,
+          "runtimeOptions": {
+            "expertCacheSlots": 16,
+            "expertCachePolicy": "lfu",
+            "prefillEnabled": true,
+            "prefillChunkTokens": 128,
+            "rdadvisePolicy": "off",
+            "modelVerification": "full-sha256"
+          },
+          "generationID": "00000000-0000-0000-0000-000000000001"
+        }
+        """
+        let decoded = try JSONDecoder().decode(
+            DecodeGenerationRequest.self,
+            from: Data(legacy.utf8))
+
+        #expect(decoded.resolvedTopK == 64)
+        #expect(decoded.resolvedTopP == 0.95)
+    }
+
     @Test func decoderAcceptsAFrameSplitAcrossSingleByteWrites() throws {
         let event = DecodeServiceEvent(
             kind: .snapshot,
